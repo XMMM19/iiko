@@ -1,8 +1,18 @@
-# Игнорируем системные и временные файлы
-.DS_Store
+# Python
+*.pyc
+__pycache__/
+
+# venv
+venv/
+
+# Logs
+*.log
+
+# Env
 .env
-bot.log
 
-# Игнорируем директории
+# macOS
+.DS_Store
+
+# Project-specific
 dev-files/
-
