@@ -1,15 +1,11 @@
 from openpyxl import load_workbook
-from openpyxl.styles import PatternFill, Border, Side
+from openpyxl.styles import PatternFill, Border, Side, Font
 from openpyxl.utils import get_column_letter
 
 # --- Константы ---
-INPUT_FILENAME = "Расширенная+оборотно-сальдовая+ведомость+(на+проверку).xlsx"
-OUTPUT_FILENAME = "outputTest.xlsx"
-ALLOWED_DEVIATION_PERCENTAGE = 0.035
 HEADER_ROW_INDEX = 6
 START_ROW_INDEX = 8
 VALUE_NORMAL = "Норма"
-TURNOVER_EXCESS_PERCENT = f"Превышение {round(ALLOWED_DEVIATION_PERCENTAGE * 100, 1)}% от оборота"
 SURPLUS_WITH_ZERO_TURNOVER = "Излишек при нулевом обороте"
 SHORTAGE_WITH_ZERO_TURNOVER = "Недостача при нулевом обороте"
 
@@ -29,10 +25,12 @@ COLUMN_SETTINGS = {
 
 # --- Утилиты ---
 
-def write_cell(sheet, row: int, col: int, value, fill=None):
+def write_cell(sheet, row: int, col: int, value, fill=None, font=None):
     cell = sheet.cell(row=row, column=col, value=value)
     if fill:
         cell.fill = fill
+    if font:
+        cell.font = font
     return cell
 
 def create_styles():
@@ -50,6 +48,7 @@ def apply_column_widths(sheet):
         sheet.column_dimensions[letter].width = len(col_data["name"]) + 2
 
 def write_headers(sheet):
+    bold_font = Font(bold=True)
     for key, col_data in COLUMN_SETTINGS.items():
         fill = PatternFill(start_color=col_data.get("fill", ""), end_color=col_data.get("fill", ""), fill_type="solid") if "fill" in col_data else None
         write_cell(
@@ -57,10 +56,14 @@ def write_headers(sheet):
             HEADER_ROW_INDEX,
             col_data["index"],
             col_data["name"],
-            fill=fill
+            fill=fill,
+            font=bold_font
         )
 
-def process_row(row_idx, sheet, border):
+def process_row(row_idx, sheet, border, allowed_deviation_percentage):
+    
+    TURNOVER_EXCESS_PERCENT = f"Превышение {round(allowed_deviation_percentage * 100, 1)}% от оборота"
+    
     # Получаем значения из колонок H, J, L, Q, S
     h = sheet.cell(row=row_idx, column=8).value or 0
     j = sheet.cell(row=row_idx, column=10).value or 0
@@ -81,7 +84,7 @@ def process_row(row_idx, sheet, border):
     
     h, j, l, q, s = map(lambda x: x if isinstance(x, (int, float)) else 0, (h, j, l, q, s))
     turnover = abs(h) + abs(j) + abs(l)
-    threshold = ALLOWED_DEVIATION_PERCENTAGE * turnover
+    threshold = allowed_deviation_percentage * turnover
 
     # W
     if turnover == 0 and q != 0:
@@ -166,7 +169,7 @@ def process_row(row_idx, sheet, border):
     return result_W, result_X
 
 
-def process_sheet(sheet):
+def process_sheet(sheet, allowed_deviation_percentage):
     border = create_styles()
     write_headers(sheet)
     apply_column_widths(sheet)
@@ -179,7 +182,7 @@ def process_sheet(sheet):
     red_fill = PatternFill(start_color=COLOR_RED, end_color=COLOR_RED, fill_type="solid")
 
     for row in range(START_ROW_INDEX, sheet.max_row):
-        result_W, result_X = process_row(row, sheet, border)
+        result_W, result_X = process_row(row, sheet, border, allowed_deviation_percentage)
 
         value_AA = sheet.cell(row=row, column=COLUMN_SETTINGS["AA"]["index"]).value
         value_AB = sheet.cell(row=row, column=COLUMN_SETTINGS["AB"]["index"]).value
@@ -207,11 +210,15 @@ def process_sheet(sheet):
             cell = sheet.cell(row=row, column=col)
             cell.border = border
 
-def main():
-    workbook = load_workbook(INPUT_FILENAME)
+def process_excel(input_path, output_path, allowed_deviation_percentage=0.035):
+    workbook = load_workbook(input_path)
     sheet = workbook.worksheets[0]
-    process_sheet(sheet)
-    workbook.save(OUTPUT_FILENAME)
+    process_sheet(sheet, allowed_deviation_percentage)
+    workbook.save(output_path)
 
 if __name__ == "__main__":
-    main()
+    INPUT_FILENAME = "dev-files/Расширенная+оборотно-сальдовая+ведомость+(на+проверку).xlsx"
+    OUTPUT_FILENAME = "dev-files/outputTest.xlsx"
+    DEFAULT_PERCENTAGE = 0.035
+
+    process_excel(INPUT_FILENAME, OUTPUT_FILENAME, DEFAULT_PERCENTAGE)
