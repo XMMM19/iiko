@@ -45,6 +45,41 @@ CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME")
 if not CHANNEL_USERNAME:
     raise ValueError("CHANNEL_USERNAME not set in .env file")
 
+START_MESSAGE = f"""👋 Привет! Я — бот CalcPro. Помогаю проанализировать Оборотно-сальдовую ведомость (ОСВ) из iiko и найти позиции с излишками или недостачами, которые превышают допустимый процент от оборота товара.
+
+
+📊 Как это работает:
+
+1. Подпишитесь на наш канал {CHANNEL_USERNAME} (обязательное условие)
+
+2. Загрузите файл ОСВ в формате Excel (.xlsx)
+
+3. Укажите допустимый процент отклонения без знака % (например: 2.0)
+
+  ▫️ Если не указать и написать боту слово \"Нет\" — тогда будет использоваться значение по умолчанию: 3.5 
+
+4. Получите обратно файл с выделенными строками, где допущены отклонения
+
+📎 Файл должен быть сформирован по определённому шаблону
+
+🎥 Инструкция по формированию отчета — в видео в посте"""
+
+END_MESSAGE = """📊 Анализ завершён!
+
+
+Вот ваш обработанный файл ОСВ с выделением отклонений:
+
+🔷 Голубым цветом отмечены позиции с превышением по излишкам
+
+🔴 Розовым цветом — позиции с превышением по недостачам
+
+
+📌 Цветовая подсветка указывает на то, что значения отклоняются от допустимого порога, который вы указали (или применено значение по умолчанию — 3.5%).
+
+🎯 Рекомендуем обратить внимание на эти строки — они могут указывать на ошибки в учёте, пересортицу или проблемы с инвентаризацией.
+
+Если нужна помощь с расшифровкой отклонений или аудитом — напишите нам, поможем разобраться!"""
+
 # --- FSM Состояния ---
 class FileProcessing(StatesGroup):
     waiting_for_percentage = State()
@@ -54,24 +89,28 @@ class FileProcessing(StatesGroup):
 async def handle_document(message: Message, state: FSMContext):
     document: Document = message.document
 
-    if not document.file_name.endswith(".xlsx"):
-        await message.answer("Пожалуйста, отправьте файл в формате .xlsx.")
-        return
-
     user_id = message.from_user.id
     if not await check_subscription(message.bot, user_id):
         await message.answer("Пожалуйста, подпишитесь на канал, чтобы пользоваться ботом.")
         return
 
-    file_id = document.file_id
+    if not document.file_name.endswith(".xlsx"):
+        await message.answer("Пожалуйста, отправьте файл в формате .xlsx.")
+        return
+
+    if document.file_size > 5 * 1024 * 1024:
+        await message.answer("Файл слишком большой. Максимальный размер — 5 МБ.")
+        return
+
+    file = await message.bot.get_file(document.file_id)
     file_path = f"temp/{document.file_name}"
-    await message.bot.download(file_id, destination=file_path)
+    await message.bot.download_file(file.file_path, destination=file_path)
 
     await state.update_data(file_path=file_path, file_name=document.file_name)
     await message.answer(
         "Ваш файл принят для дальнейшей обработки.\n\n"
         "Пожалуйста, укажите допустимый процент отклонения. Например:\n"
-        "`4.5` или `2`\n\n"
+        "`4.5` или `2.0`\n\n"
         "Если хотите использовать значение по умолчанию (3.5%), отправьте `Нет` (без точки).",
         parse_mode=ParseMode.MARKDOWN
     )
@@ -90,7 +129,7 @@ async def handle_percentage(message: Message, state: FSMContext):
         else:
             percentage = float(user_input.replace(",", ".")) / 100.0
     except ValueError:
-        await message.answer("Введите число, например `4.5` или `Нет`.")
+        await message.answer("Введите число, например \"4.5\" или \"Нет\".")
         return
 
     output_path = f"temp/processed_{file_name}"
@@ -98,7 +137,7 @@ async def handle_percentage(message: Message, state: FSMContext):
 
     try:
         process_excel(file_path, output_path, allowed_deviation_percentage=percentage)
-        await message.answer_document(FSInputFile(output_path), caption="Обработка завершена. Вот ваш файл.")
+        await message.answer_document(FSInputFile(output_path), caption=END_MESSAGE)
     except Exception as e:
         logging.exception("Ошибка при обработке файла:")
         await message.answer("Произошла ошибка при обработке файла.")
@@ -115,12 +154,10 @@ async def check_subscription(bot: Bot, user_id: int) -> bool:
 # Обработчик команды /start
 async def cmd_start(message: Message):
     logging.info(f"Получена команда /start от пользователя id={message.from_user.id}")
-    await message.answer(
-        "Здравствуйте!\n"
-        "Для активации функций бота, пожалуйста, подпишитесь на наш канал:\n\n"
-        f"{CHANNEL_USERNAME}\n\n"
-        "После подписки нажмите /check для продолжения."
-    )
+    await message.answer(START_MESSAGE)
+
+async def cmd_help(message: Message):
+    await message.answer(START_MESSAGE)
 
 # Обработчик команды /check
 async def check_user_subscription(message: Message, bot: Bot):
@@ -139,8 +176,9 @@ async def main():
     dp = Dispatcher(storage=MemoryStorage())
     dp.message.register(cmd_start, F.text == "/start")
     dp.message.register(check_user_subscription, F.text == "/check")
+    dp.message.register(cmd_help, F.text == "/help")
     dp.message.register(handle_document, F.document)
-    dp.message.register(handle_percentage, FileProcessing.waiting_for_percentage)
+    dp.message.register(handle_percentage, F.text, FileProcessing.waiting_for_percentage)
 
     os.makedirs("temp", exist_ok=True)
     logging.info("Бот запущен.")
