@@ -3,6 +3,7 @@ import asyncio
 import os
 import logging
 from dotenv import load_dotenv
+import re
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import Message, ChatMember, FSInputFile, Document
@@ -44,6 +45,10 @@ if not BOT_TOKEN:
 CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME")
 if not CHANNEL_USERNAME:
     raise ValueError("CHANNEL_USERNAME not set in .env file")
+
+FILENAME_PATTERN = re.compile(
+    r"^Расширенная оборотно-сальдовая ведомость \d{2}\.\d{2}\.\d{4} \d{2}\.\d{2}\.\d{2}\.xlsx$"
+)
 
 START_MESSAGE = f"""👋 Привет! Я — бот CalcPro. Помогаю проанализировать Оборотно-сальдовую ведомость (ОСВ) из iiko и найти позиции с излишками или недостачами, которые превышают допустимый процент от оборота товара.
 
@@ -98,8 +103,17 @@ async def handle_document(message: Message, state: FSMContext):
         await message.answer("Пожалуйста, отправьте файл в формате .xlsx.")
         return
 
-    if document.file_size > 5 * 1024 * 1024:
-        await message.answer("Файл слишком большой. Максимальный размер — 5 МБ.")
+    if document.file_size > 1 * 1024 * 1024:
+        await message.answer("Файл слишком большой. Максимальный размер — 1 МБ.")
+        return
+
+    if not is_valid_filename(document.file_name):
+        await message.answer(
+            "Неверное имя файла. Убедитесь, что оно соответствует шаблону:\n\n"
+            "<b>Расширенная оборотно-сальдовая ведомость ДД.ММ.ГГГГ ЧЧ.ММ.СС.xlsx</b>\n\n"
+            "Например: <i>Расширенная оборотно-сальдовая ведомость 17.07.2025 14.35.05.xlsx</i>",
+            parse_mode=ParseMode.HTML
+        )
         return
 
     file = await message.bot.get_file(document.file_id)
@@ -167,6 +181,9 @@ async def check_user_subscription(message: Message, bot: Bot):
         await message.answer("Вы подписаны на канал. Теперь вы можете отправлять файл на обработку.")
     else:
         await message.answer("Подписка не найдена. Пожалуйста, подпишитесь на канал.")
+
+def is_valid_filename(filename: str) -> bool:
+    return bool(FILENAME_PATTERN.match(filename))
 
 # Основная функция
 async def main():
