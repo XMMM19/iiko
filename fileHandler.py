@@ -53,6 +53,16 @@ def to_number(val):
 # читаем .xls
 df = pd.read_excel("dev-files/in.xls", sheet_name=0, dtype=str, engine="xlrd")
 
+# Заменим имена колонок вида "Unnamed: N" на пустые, НО оставим имя первой колонки как есть
+cols = list(df.columns)
+if cols:
+    first = cols[0]
+    new_cols = [first]
+    for c in cols[1:]:
+        name = "" if (c is None or str(c).startswith("Unnamed")) else c
+        new_cols.append(name)
+    df.columns = new_cols
+
 # --- Удаляем строки, где в ЛЮБОЙ ячейке встречаются слова "Товар" или "кол-во" (целые слова, без учета регистра) ---
 compiled = re.compile(r"\b(?:товар|кол-во)\b", flags=re.IGNORECASE)  # (?i) = ignore case, \b = границы слова
 mask_has_words = df.apply(lambda s: s.astype(str).str.contains(compiled, na=False)).any(axis=1)
