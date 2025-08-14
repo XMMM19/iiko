@@ -5,7 +5,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 from openpyxl.utils import get_column_letter
-from openpyxl.styles import Alignment, PatternFill
+from openpyxl.styles import Alignment, PatternFill, Border, Side
 
 # -------------------------------
 # Helpers
@@ -295,6 +295,13 @@ def process_excel(
                 row_fill = fill_w_row if has_prev_w else fill_v_row
                 for col_idx in range(1, ws.max_column + 1):
                     ws.cell(row=row_idx, column=col_idx).fill = row_fill
+
+        # Тонкие границы для всех ячеек с данными
+        thin = Side(style="thin", color="FF000000")
+        border = Border(left=thin, right=thin, top=thin, bottom=thin)
+        for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
+            for cell in row:
+                cell.border = border
 
     return output_path
 
