@@ -99,22 +99,11 @@ async def handle_document(message: Message, state: FSMContext):
         await message.answer("Пожалуйста, подпишитесь на канал, чтобы пользоваться ботом.")
         return
 
-    if not document.file_name.endswith(".xlsx"):
-        await message.answer("Пожалуйста, отправьте файл в формате .xlsx.")
-        return
 
     if document.file_size > 1 * 1024 * 1024:
         await message.answer("Файл слишком большой. Максимальный размер — 1 МБ.")
         return
 
-    if not is_valid_filename(document.file_name):
-        await message.answer(
-            "Неверное имя файла. Убедитесь, что оно соответствует шаблону:\n\n"
-            "<b>Расширенная оборотно-сальдовая ведомость ДД.ММ.ГГГГ ЧЧ.ММ.СС.xlsx</b>\n\n"
-            "Например: <i>Расширенная оборотно-сальдовая ведомость 17.07.2025 14.35.05.xlsx</i>",
-            parse_mode=ParseMode.HTML
-        )
-        return
 
     file = await message.bot.get_file(document.file_id)
     file_path = f"temp/{document.file_name}"
