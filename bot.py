@@ -4,6 +4,7 @@ import os
 import logging
 from dotenv import load_dotenv
 import re
+from pathlib import Path
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import Message, ChatMember, FSInputFile, Document
@@ -135,7 +136,13 @@ async def handle_percentage(message: Message, state: FSMContext):
         await message.answer("Введите число, например \"4.5\" или \"Нет\".")
         return
 
-    output_path = f"temp/processed_{file_name}"
+    # output_path = f"temp/processed_{file_name}"
+
+    # формируем имя вида: temp/[ОБРАБОТАНО]ИмяФайла.xlsx
+    stem = Path(file_name).stem  # убираем расширение исходного файла
+    output_name = f"[ОБРАБОТАНО] {stem}.xlsx"
+    output_path = str(Path("temp") / output_name)
+
     await message.answer("Идет обработка файла, пожалуйста подождите...")
 
     try:
