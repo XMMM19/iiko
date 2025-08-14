@@ -54,8 +54,8 @@ def to_number(val):
 df = pd.read_excel("dev-files/in.xls", sheet_name=0, dtype=str, engine="xlrd")
 
 # --- Удаляем строки, где в ЛЮБОЙ ячейке встречаются слова "Товар" или "кол-во" (целые слова, без учета регистра) ---
-pattern = r"(?i)\b(товар|кол-во)\b"  # (?i) = ignore case, \b = границы слова
-mask_has_words = df.apply(lambda s: s.astype(str).str.contains(pattern, regex=True, na=False)).any(axis=1)
+compiled = re.compile(r"\b(?:товар|кол-во)\b", flags=re.IGNORECASE)  # (?i) = ignore case, \b = границы слова
+mask_has_words = df.apply(lambda s: s.astype(str).str.contains(compiled, na=False)).any(axis=1)
 
 # >>> Защищаем строки 7..9 от удаления <<<
 # Если вы имеете в виду НОМЕРА СТРОК В EXCEL (1-based), используйте индексы 6,7,8 в pandas:
@@ -66,7 +66,7 @@ mask_to_drop = mask_has_words & ~df.index.isin(protected_rows)
 df = df.loc[~mask_to_drop].reset_index(drop=True)
 
 # конвертируем все ячейки по месту (можно ограничить списком колонок)
-df = df.applymap(to_number)
+df = df.map(to_number)
 
 # --- Вписываем подписи в строку 7 (pandas) — это 9-я строка Excel ---
 # Нужные колонки: 21..26 (V..AA в Excel)
