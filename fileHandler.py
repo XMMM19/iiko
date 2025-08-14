@@ -249,4 +249,20 @@ with pd.ExcelWriter("dev-files/out.xlsx", engine="openpyxl") as writer:
     fill_w = PatternFill(start_color="FFF4CCCC", end_color="FFF4CCCC", fill_type="solid")  # W9
     ws[f"V{excel_label_row}"].fill = fill_v
     ws[f"W{excel_label_row}"].fill = fill_w
+
+    # закраска всей строки, если слово "Превышение" встречается в V или W ---
+    # Если одновременно в V и W есть "Превышение", приоритет отдаём цвету W.
+    fill_v_row = PatternFill(start_color="FFD9E1F2", end_color="FFD9E1F2", fill_type="solid")  # для V
+    fill_w_row = PatternFill(start_color="FFF4CCCC", end_color="FFF4CCCC", fill_type="solid")  # для W
+
+    # Начинаем с 2-й строки (пропускаем заголовок df)
+    for row_idx in range(2, ws.max_row + 1):
+        v_val = str(ws[f"V{row_idx}"].value or "").lower()
+        w_val = str(ws[f"W{row_idx}"].value or "").lower()
+        has_prev_v = "превышение" in v_val
+        has_prev_w = "превышение" in w_val
+        if has_prev_v or has_prev_w:
+            row_fill = fill_w_row if has_prev_w else fill_v_row
+            for col_idx in range(1, ws.max_column + 1):
+                ws.cell(row=row_idx, column=col_idx).fill = row_fill
     
