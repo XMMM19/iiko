@@ -5,6 +5,8 @@ import logging
 from dotenv import load_dotenv
 import re
 from pathlib import Path
+from datetime import datetime
+from zoneinfo import ZoneInfo  # Python 3.9+
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import Message, ChatMember, FSInputFile, Document
@@ -138,9 +140,10 @@ async def handle_percentage(message: Message, state: FSMContext):
 
     # output_path = f"temp/processed_{file_name}"
 
-    # формируем имя вида: temp/[ОБРАБОТАНО]ИмяФайла.xlsx
-    stem = Path(file_name).stem  # убираем расширение исходного файла
-    output_name = f"[ОБРАБОТАНО] {stem}.xlsx"
+    # формируем имя вида: temp/[YYYY-MM-DD_HH-MM-SS] ИмяФайла.xlsx
+    stem = Path(file_name).stem
+    ts = datetime.now(ZoneInfo("Asia/Almaty")).strftime("%Y-%m-%d_%H-%M-%S")
+    output_name = f"[{ts}] {stem}.xlsx"
     output_path = str(Path("temp") / output_name)
 
     await message.answer("Идет обработка файла, пожалуйста подождите...")
