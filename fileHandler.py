@@ -5,7 +5,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 from openpyxl.utils import get_column_letter
-from openpyxl.styles import Alignment, PatternFill, Border, Side
+from openpyxl.styles import Alignment, PatternFill, Border, Side, Font
 
 # -------------------------------
 # Helpers
@@ -257,6 +257,25 @@ def process_excel(
                 aa_val = ""
         df.iat[i, AA_IDX] = aa_val
 
+    # --- Суммы по колонкам Z и AA и запись в строку "Итого" ---
+    z_series = pd.to_numeric(df.iloc[:, Z_IDX], errors="coerce").fillna(0)
+    aa_series = pd.to_numeric(df.iloc[:, AA_IDX], errors="coerce").fillna(0)
+
+    def _row_has_itogo(row) -> bool:
+        for v in row:
+            if isinstance(v, str) and "итого" in v.casefold():
+                return True
+        return False
+
+    itogo_mask = df.apply(_row_has_itogo, axis=1)
+    if itogo_mask.any():
+        itogo_idx = itogo_mask[itogo_mask].index[-1]  # последняя строка "Итого"
+        # не включаем саму строку "Итого" в сумму
+        sum_z = z_series[z_series.index != itogo_idx].sum()
+        sum_aa = aa_series[aa_series.index != itogo_idx].sum()
+        df.iat[itogo_idx, Z_IDX] = float(sum_z)
+        df.iat[itogo_idx, AA_IDX] = float(sum_aa)
+
     # --- Сохраняем и форматируем ---
     # Важно: при header=True (по умолчанию) pandas-строка 7 окажется на 9-й строке Excel.
     header_written = True
@@ -289,8 +308,8 @@ def process_excel(
         for row_idx in range(2, ws.max_row + 1):  # начиная со 2-й строки (после заголовка df)
             v_val = str(ws[f"V{row_idx}"].value or "").lower()
             w_val = str(ws[f"W{row_idx}"].value or "").lower()
-            has_prev_v = "превышение" in v_val
-            has_prev_w = "превышение" in w_val
+            has_prev_v = "превышение" in v_val or "излишек" in v_val
+            has_prev_w = "превышение" in w_val or "недостача" in w_val
             if has_prev_v or has_prev_w:
                 row_fill = fill_w_row if has_prev_w else fill_v_row
                 for col_idx in range(1, ws.max_column + 1):
@@ -302,6 +321,30 @@ def process_excel(
         for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
             for cell in row:
                 cell.border = border
+
+        # --- Жирным строки, где встречается "Итого", "Товар" или "Кол-во" ---
+        # Нормализуем типографские дефисы к обычному "-" (кол-во/кол–во и т.п.)
+        _dash_map = str.maketrans({
+            "\u2011": "-",  # non-breaking hyphen
+            "\u2013": "-",  # en dash
+            "\u2014": "-",  # em dash
+            "\u2212": "-",  # minus sign
+        })
+
+        pattern = re.compile(r"\b(итого|товар|кол-во)\b", flags=re.IGNORECASE)
+
+        for row_idx in range(2, ws.max_row + 1):  # со 2-й строки, чтобы не трогать заголовок DF
+            make_bold = False
+            for col_idx in range(1, ws.max_column + 1):
+                val = ws.cell(row=row_idx, column=col_idx).value
+                if isinstance(val, str):
+                    s = val.translate(_dash_map)
+                    if pattern.search(s):
+                        make_bold = True
+                        break
+            if make_bold:
+                for col_idx in range(1, ws.max_column + 1):
+                    ws.cell(row=row_idx, column=col_idx).font = Font(bold=True)
 
     return output_path
 
